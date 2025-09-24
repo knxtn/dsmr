@@ -1,69 +1,145 @@
----
 substitutions:
   device_name: slimmelezer
-    
+  device_description: "P1 module to read your smart meter in Belgium"
+  
 esphome:
-  name: ${device_name}
-  platform: ESP8266
-  esp8266_restore_from_flash: true
-  board: d1_mini
-  name_add_mac_suffix: false
+  name: "${device_name}"
+  comment: "${device_description}"
+  friendly_name: Slimmelezer+
+  name_add_mac_suffix: true
   project:
     name: zuidwijk.slimmelezer
-    version: "1.2"
+    version: "2.0"
+  
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
 
 wifi:
-  # remove leading '#' and fill in your wifi details
-#  ssid: !secret wifi_ssid 
-#  password: !secret wifi_password
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # If enabled, directly connects to WiFi network without doing a full scan first.
+  # This is required for hidden networks and can significantly improve connection times.
+  # Defaults to off . The downside is that this option connects to the first network the ESP sees, even if that network is very far away and better ones are available.
+  #fast_connect: true
+  
+  # Powersaving for brownout due to 250mA restriction P1
+  output_power: 14dB
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: ${device_name}
-
+    ssid: !secret ap_ssid
+    password: !secret ap_password
+    ap_timeout: 60s
+ 
 captive_portal:
-
+ 
 # Enable logging
 logger:
   baud_rate: 0
-
+ 
 # Enable Home Assistant API
 api:
-
+  encryption:
+    key: ""
+  # services:
+  #   service: set_dsmr_key
+  #   variables:
+  #     private_key: string
+  #   then:
+  #     - logger.log:
+  #         format: Setting private key %s. Set to empty string to disable
+  #         args: [private_key.c_str()]
+  #     - globals.set:
+  #         id: has_key
+  #         value: !lambda "return private_key.length() == 32;"
+  #     - lambda: |-
+  #         if (private_key.length() == 32)
+  #           private_key.copy(id(stored_decryption_key), 32);
+  #         id(dsmr_instance).set_decryption_key(private_key);
+ 
 ota:
-
-dashboard_import:
-  package_import_url: github://zuidwijk/dsmr/slimmelezer-be.yaml@main
-  import_full_config: true
-
+  - platform: esphome
+    password: ""
+ 
 web_server:
   port: 80
-
+ 
 uart:
   baud_rate: 115200
   rx_pin: D7
   rx_buffer_size: 1700
-
+ 
+# globals:
+#   - id: has_key
+#     type: bool
+#     restore_value: yes
+#     initial_value: "false"
+#   - id: stored_decryption_key
+#     type: char[32]
+#     restore_value: yes
+ 
 dsmr:
   id: dsmr_instance
   max_telegram_length: 1700
-  
+  # For Luxembourg users set here your decryption key. 
+  # Enable this when using decryption for Luxembourg;
+  # key looks like '00112233445566778899AABBCCDDEEFF'
+  #decryption_key: !secret decryption_key 
+ 
 sensor:
   - platform: dsmr
+    water_delivered:
+      name: "Water delivered"
+    # --- Electricity ---
+    # energy_delivered_lux:
+    #   name: "Energy Consumed Luxembourg"
+    #   state_class: total_increasing
     energy_delivered_tariff1:
       name: "Energy Consumed Tariff 1"
+      state_class: total_increasing
     energy_delivered_tariff2:
       name: "Energy Consumed Tariff 2"
+      state_class: total_increasing
+    # energy_returned_lux:
+    #   name: "Energy Produced Luxembourg"
+    #   state_class: total_increasing
     energy_returned_tariff1:
       name: "Energy Produced Tariff 1"
+      state_class: total_increasing
     energy_returned_tariff2:
       name: "Energy Produced Tariff 2"
+      state_class: total_increasing
     power_delivered:
       name: "Power Consumed"
       accuracy_decimals: 3
     power_returned:
       name: "Power Produced"
       accuracy_decimals: 3
+    # electricity_failures:
+    #   name: "Electricity Failures"
+    #   icon: mdi:alert
+    # electricity_long_failures:
+    #   name: "Long Electricity Failures"
+    #   icon: mdi:alert
+    # electricity_sags_l1:
+    #   name: "Voltage Sags Phase 1"
+    #   icon: mdi:alert
+    # electricity_sags_l2:
+    #   name: "Voltage Sags Phase 2"
+    #   icon: mdi:alert
+    # electricity_sags_l3:
+    #   name: "Voltage Sags Phase 3"
+    #   icon: mdi:alert
+    # electricity_swells_l1:
+    #   name: "Voltage Swells Phase 1"
+    #   icon: mdi:alert
+    # electricity_swells_l2:
+    #   name: "Voltage Swells Phase 2"
+    #   icon: mdi:alert
+    # electricity_swells_l3:
+    #   name: "Voltage Swells Phase 3"
+    #   icon: mdi:alert
     voltage_l1:
       name: "Voltage Phase 1"
     voltage_l2:
@@ -94,8 +170,7 @@ sensor:
     power_returned_l3:
       name: "Power Produced Phase 3"
       accuracy_decimals: 3
-    gas_delivered_be:
-      name: "Gas Consumed Belgium"
+    # --- Peak Tariff ---
     active_energy_import_current_average_demand:
       name: "Peak Current Average Quarterly Demand"
       icon: mdi:chart-sankey
@@ -105,30 +180,55 @@ sensor:
     active_energy_import_maximum_demand_last_13_months:
       name: "Peak 13 Month Maximum Quarterly Demand"
       icon: mdi:chart-sankey
+    # --- Gas ---
+    # gas_delivered:
+    #   name: "Gas Consumed"
+    #   state_class: total_increasing
+    gas_delivered_be:
+      name: "Gas Consumed Belgium"
+      state_class: total_increasing
   - platform: uptime
     name: "${device_name} Uptime"
   - platform: wifi_signal
     name: "${device_name} Wi-Fi Signal"
     update_interval: 60s
-
+ 
 text_sensor:
   - platform: dsmr
     identification:
       name: "DSMR Identification"
+    # p1_version:
+    #   name: "DSMR Version"
     p1_version_be:
       name: "DSMR Version Belgium"
+    # timestamp:
+    #   name: "DSMR Timestamp"
     electricity_tariff:
       name: "DSMR Tariff"
+    # electricity_failure_log:
+    #   name: "DSMR Electricity Failure Log"
+    #   icon: mdi:message-alert-outline
+    # message_short:
+    #   name: "DSMR Message Short"
+    #   icon: mdi:message-text-outline
     message_long:
       name: "DSMR Message Long"
       icon: mdi:message-text-outline
+    # gas_equipment_id:
+    #   name: "DSMR Gas Equipment ID"
+    # water_equipment_id:
+    #   name: "DSMR Water Equipment ID"
+    # sub_equipment_id:
+    #   name: "DSMR Sub Equipment ID"
+    # gas_delivered_text:
+    #   name: "DSMR Gas Delivered Text"
   - platform: wifi_info
     ip_address:
-      name: "SlimmeLezer IP Address"
+      name: "${device_name} IP Address"
     ssid:
-      name: "SlimmeLezer Wi-Fi SSID"
+      name: "${device_name} Wi-Fi SSID"
     bssid:
-      name: "SlimmeLezer Wi-Fi BSSID"
+      name: "${device_name} Wi-Fi BSSID"
   - platform: version
     name: "ESPHome Version"
     hide_timestamp: true
